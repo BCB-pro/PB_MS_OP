@@ -1,0 +1,166 @@
+---
+title: "Analyse"
+output: html_document
+author : Baptiste CRINIERE-BOIZET
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r librairies, echo = FALSE,warning=FALSE, message=FALSE}
+library(tidyverse)
+library(xlsx)
+library(ggpubr)
+```
+
+```{r data management, echo = FALSE, warning=FALSE, message=FALSE}
+## Importation des données
+setwd("/home/baptiste.criniere/Documents/PB_OCEANE/Data/")
+data_long <- read_csv("data_long_mean.csv")
+speed <- xlsx::read.xlsx("comportement_tests.xlsx", 1, startRow = 3, header=TRUE, colClasses=NA)
+
+## Data Management
+speed <- speed %>%
+  dplyr::select(X3.Months.13) %>% 
+  dplyr::rename(speed = X3.Months.13)
+
+## Les données à trois mois seulement
+data_3months <- data_long %>% 
+  dplyr::filter(time %in% "3 Months") %>% 
+  dplyr::mutate(speed = speed$speed)
+
+## Data en format wide
+## On fusionne les mois 1,2,3 pour enlever le bruit contenue dans une même mesure
+data_wide <- data_long %>% 
+  dplyr::filter(time %in% c("1 Month","2 Months","3 Months")) %>% 
+  group_by(mouse) %>% 
+  summarise(front_limb = mean(front_limb, na.rm = TRUE),
+            sqrt_nb_errors = mean(sqrt(number_of_errors), na.rm = TRUE)) %>% 
+  dplyr::mutate(speed = speed$speed)
+```
+
+
+## Régression linéaire trois mois après la chirurgie {.tabset}
+Il y a une corrélation statistiquement significative entre front limb et speed, et entre number of errors et speed. Cependant, on peut considérer ces corrélations comme "faibles". En effet pour front limb on a une corrélation de Pearson de 0,32 (dans ce modèle là la variable front limb explique 10% de la variance de speed), et pour number of errors de -0,4 (soit 16% de la variance). \
+Lorsque l'on représente les résidus des modèles de régression, on observe la normalité des résidus malgré quelques valeurs extrêmes. Ces valeurs extrêmes peuvent entraîner une diminution de la corrélation entre nos variables, il est possible que la souris ait décidé de ne pas faire l'exercice, une erreur de mesure ou autre. L'avantage de nos données est que l'on possède plusieurs mesures de nos variables front limb et nombre d'erreur, et l'on a remarqué qu'il y avait peu de différences entre les 1, 2, 3 mois pour ces variables après la chirurgie, c'est pourquoi j'ai décidé de moyenner la valeur de ces variables pour chaque souris sur cet intervalle de temps.
+\
+CF section suivante.
+
+### Front limb et speed
+```{r Figure 1, echo = FALSE,warning=FALSE, message=FALSE, results='hide', fig.align='center'}
+data_3months %>% 
+  ggplot(aes(x = front_limb, y = speed))+
+  geom_point(alpha = 0.5, color = "sienna4")+
+  geom_smooth(method = "lm", se = FALSE, color = "sienna4")+
+  stat_cor(method = "pearson", label.y.npc = "bottom", 
+           geom = "text", size = 3.6, show.legend = FALSE)+
+  xlab("Front limb")+
+  ylab("Speed")+
+  theme_bw()
+```
+
+```{r regression 1, echo = FALSE,warning=FALSE, message=FALSE, results='hide', fig.show = 'hide'}
+model <- lm(speed ~ front_limb, data = data_3months)
+summary(model)
+ggResidpanel::resid_panel(model)
+```
+
+### Number of errors (sqrt) et speed
+```{r Figure 2, echo = FALSE,warning=FALSE, message=FALSE, results='hide', fig.align='center'}
+data_3months %>% 
+  ggplot(aes(x = sqrt(number_of_errors), y = speed))+
+  geom_jitter(alpha = 0.5, color = "sienna4")+
+  geom_smooth(method = "lm", se = FALSE, color = "sienna4")+
+  stat_cor(method = "pearson", label.y.npc = "bottom", 
+           geom = "text", size = 3.6, show.legend = FALSE)+
+  xlab("Number of errors")+
+  ylab("Speed")+
+  theme_bw()
+```
+
+```{r regression 2, echo = FALSE,warning=FALSE, message=FALSE, results='hide', fig.show = 'hide'}
+model <- lm(speed ~ sqrt(number_of_errors), data = data_3months)
+summary(model)
+ggResidpanel::resid_panel(model)
+```
+
+## Régression linéaire mois : 1, 2, 3 après la chirurgie {.tabset}
+Avec ce nouveau modèle la corrélation entre front limb et speed passe à 0,43 (19% de variance expliquée), et pour number of errors -0.55 (30% de variance expliquée)
+
+### Front limb et speed
+```{r Figure 3, echo = FALSE,warning=FALSE, message=FALSE, results='hide', fig.align='center'}
+data_wide %>% 
+  ggplot(aes(x = front_limb, y = speed))+
+  geom_point(alpha = 0.5, color = "sienna4")+
+  geom_smooth(method = "lm", se = FALSE, color = "sienna4")+
+  stat_cor(method = "pearson", label.y.npc = "bottom", 
+           geom = "text", size = 3.6, show.legend = FALSE)+
+  xlab("Front limb")+
+  ylab("Speed")+
+  theme_bw()
+```
+
+```{r regression 3, echo = FALSE,warning=FALSE, message=FALSE, results='hide', fig.show = 'hide'}
+model <- lm(speed ~ front_limb, data = data_wide)
+summary(model)
+ggResidpanel::resid_panel(model)
+```
+
+### Number of errors (sqrt) et speed
+```{r Figure 5, echo = FALSE,warning=FALSE, message=FALSE, results='hide', fig.align='center'}
+data_wide %>% 
+  ggplot(aes(x = sqrt_nb_errors, y = speed))+
+  geom_jitter(alpha = 0.5, color = "sienna4")+
+  geom_smooth(method = "lm", se = FALSE, color = "sienna4")+
+  stat_cor(method = "pearson", label.y.npc = "bottom", 
+           geom = "text", size = 3.6, show.legend = FALSE)+
+  xlab("Number of errors")+
+  ylab("Speed")+
+  theme_bw()
+```
+
+```{r echo = FALSE,warning=FALSE, message=FALSE, results='hide', fig.show = 'hide'}
+model <- lm(speed ~ sqrt_nb_errors, data = data_wide)
+summary(model)
+ggResidpanel::resid_panel(model)
+```
+
+## Corrélation par groupe
+Lorsque que l'on regarde la corrélation entre les variables font_limb/nb_errors et speed par groupe, on observe que la corrélation est nulle.
+
+```{r Figure 6, echo = FALSE,warning=FALSE, message=FALSE, results='hide', fig.align='center'}
+data_3months %>% 
+  ggplot(aes(x = front_limb, y = speed, group = group, color = group))+
+  geom_jitter()+
+  geom_smooth(method = "lm", se = FALSE)+
+  stat_cor(method = "pearson", label.y.npc = "bottom", 
+           geom = "text", size = 3.6, show.legend = FALSE)+
+  xlab("Number of errors")+
+  ylab("Speed")+
+  scale_color_manual(breaks = c("NG", "HD", "MS"), values = c("#077e97", "#0b9a64", "#d1146e"))+
+  theme_bw()
+```
+
+## Corrélation front_lim et nb_error
+
+```{r Figure 7, echo = FALSE,warning=FALSE, message=FALSE, results='hide', fig.align='center'}
+data_3months %>% 
+  ggplot(aes(x = front_limb, y = number_of_errors))+
+  geom_jitter(alpha = 0.9)+
+  geom_smooth(method = "lm", se = FALSE)+
+  stat_cor(method = "pearson", label.y.npc = "bottom", 
+           geom = "text", size = 3.6, show.legend = FALSE)+
+  theme_bw()
+```
+
+
+```{r Figure 7, echo = FALSE,warning=FALSE, message=FALSE, results='hide', fig.align='center'}
+data_wide %>% 
+  ggplot(aes(x = front_limb, y = sqrt_nb_errors))+
+  geom_jitter(alpha = 0.9)+
+  geom_smooth(method = "lm", se = FALSE)+
+  stat_cor(method = "pearson", label.y.npc = "bottom", 
+           geom = "text", size = 3.6, show.legend = FALSE)+
+  theme_bw()
+```

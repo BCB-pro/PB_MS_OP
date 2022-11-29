@@ -1,0 +1,35 @@
+---
+title: "Régression"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r regression 1, echo = FALSE,warning=FALSE, message=FALSE, results='hide', fig.show = 'hide'}
+library(xlsx)
+library(ggpubr)
+
+speed <- xlsx::read.xlsx("/home/baptiste.criniere/Documents/PB_OCEANE/Data/Speed%olig2cc1.xlsx", 1, header=TRUE, colClasses=NA)
+```
+
+## Régression linéaire
+Il y a une corrélation de 0.74 entre tes deux variables, de plus cette corrélation est positive. A noter qu'il n'y a pas énormément de points pour faire une régression.
+```{r Figure 1, echo = FALSE,warning=FALSE, message=FALSE, results='hide', fig.align='center'}
+names(speed) <- c("ID", "Speed", "Olig")
+speed %>% 
+  ggplot(aes(x = Olig, y = Speed))+
+  geom_point(alpha = 0.5, color = "sienna4")+
+  geom_smooth(method = "lm", se = FALSE, color = "sienna4")+
+  stat_cor(method = "pearson", label.y.npc = "top", 
+           geom = "text", size = 3.6, show.legend = FALSE)+
+  theme_bw()
+```
+
+
+```{r echo = FALSE,warning=FALSE, message=FALSE, results='hide', fig.show = 'hide'}
+model <- lm(Speed ~ Olig, data = speed)
+summary(model)
+ggResidpanel::resid_panel(model)
+```

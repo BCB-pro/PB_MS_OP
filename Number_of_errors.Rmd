@@ -1,0 +1,156 @@
+---
+title: "Number of errors"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Library
+```{r}
+library(ggResidpanel)
+```
+
+## Data
+
+```{r }
+data <- read.csv("/home/baptiste.criniere/Documents/Oceane/data_long_mean.csv")
+data$time_ord <- factor(data$time, levels = c("Before-Surgery", "1 Week", "1 Month", "2 Months", "3 Months"))
+```
+
+## Analyse descriptive
+### Analyse de la variable time to cross
+
+On représente par un histogramme les valeurs de time to cross. On représente aussi par une boxplot.
+```{r}
+p0 <- data %>% ggplot(aes(x = number_of_errors)) +
+    geom_histogram(binwidth=1, fill="#69b3a2", color="#e9ecef", alpha=0.9) +
+  xlab("Time to cross")
+p0
+p0 <- data %>% ggplot(aes(x = sqrt(number_of_errors))) +
+    geom_histogram(binwidth=0.5, fill="#69b3a2", color="#e9ecef", alpha=0.9) +
+  xlab("Time to cross")
+p0
+```
+## Means plots
+```{r}
+data %>% 
+  ggplot(aes(x = num_time,
+             y = number_of_errors,
+             color = group)) +
+  stat_summary() +                      
+  stat_summary(fun = "mean",            
+               geom = "line")+
+  theme_bw()
+```
+
+
+### Graphique en trellis
+Représentation du score "time to cross" en fonction de la visite par un graphique en trellis, en regroupant les souris par groupe.
+\
+On observe globalement un diminution entre la première visite et la seconde au sein des trois groupes, et aussi une augmentation entre la 4ème visite et la dernière.
+```{r , echo=FALSE, fig.align = 'center'}
+p1 <- data %>% 
+  ggplot(aes(x = time_ord,
+             y = sqrt(number_of_errors),
+             colour= mouse,
+             group = mouse)) +
+  geom_point(size = 0.75) +
+  geom_line(
+            alpha = .5,
+            size = 1) +
+  facet_grid(. ~ group)  +
+  theme_bw() +
+  scale_x_discrete(labels = c('1','2','3','4','5'))+
+  xlab("Visit") + ylab("Time to cross") +
+  theme(strip.text.x = element_text(size=12, face="bold", color ="white"),
+        strip.background = element_rect( fill="gray8"))
+p1
+```
+
+
+
+## Modèle
+
+```{r}
+mod0 <- lm(sqrt(number_of_errors) ~ time_ord, data = data)
+AIC(mod0)
+# Modèle effet mixte de la souris
+mod0.1 <- lmerTest::lmer(sqrt(number_of_errors) ~ time_ord + (1 | mouse), data = data)
+AIC(mod0.1)
+
+# Modèle effet mixte de la souris et du donneur
+summary(mod0.1)
+mod0.1 %>% 
+  emmeans::emmeans(pairwise ~ time_ord,
+                   at = list(age = 13))
+sjPlot::plot_model(mod0.1,
+                   type = "pred",
+                   terms = c("time_ord"),
+                   title = "")
+```
+## Modèle complet
+```{r}
+# Modèle effet mixte de la souris et du donneur
+mod1.0 <- lmerTest::lmer(sqrt(number_of_errors) ~ group*time_ord  + (1 | mouse), data = data)
+mod1.0 <- lmerTest::lmer(sqrt(number_of_errors) ~ group + time_ord + group:time_ord  + (1  | mouse), data = data)
+
+AIC(mod1.0)
+summary(mod1.0)
+Anova(mod1.0)
+p3 <- sjPlot::plot_model(mod1.0,
+                   type = "pred",
+                   terms = c("time_ord", "group"),
+                   title = "")
+p3
+```
+
+## Interprétation des effets fixes
+## Interprétation des effets aléatoires
+La variance des résidus est de 17.86.\
+
+```{r}
+lme4::VarCorr(mod1.1)%>% 
+  print(comp = c("Variance", "Std.Dev"),
+        digits = 3)
+```
+
+## Hypothèses
+On observe que les résidus sont normalement distribués.
+```{r}
+ggResidpanel::resid_panel(mod1.1)
+```
+
+## Comparaisons post hoc
+```{r}
+mod1.1 %>% 
+  emmeans::emmeans(pairwise ~ time_ord,
+                   at = list(age = 13))
+mod1.1 %>% 
+  emmeans::emmeans(pairwise ~ group,
+                   at = list(age = 13))
+mod1.0 %>% 
+  emmeans::emmeans(pairwise ~ time_ord:group,
+                   at = list(age = 13))
+```
+
+
+## Effet du donneur
+```{r}
+data$donnor_id <- as.factor(data$donnor_id)
+
+data2 <- data[data$group=="NG"&data$num_time!=1,]
+
+mod1.0 <- lmerTest::lmer(front_limb ~ num_time  + (1 + num_time | donnor_id/mouse), data = data)
+AIC(mod1.0)
+summary(mod1.0)
+Anova(mod1.0)
+p3 <- sjPlot::plot_model(mod1.0,
+                   type = "pred",
+                   terms = c("num_time", "donnor_id"),
+                   title = "")
+p3
+
+```
+
