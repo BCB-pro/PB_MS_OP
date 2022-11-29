@@ -1,0 +1,188 @@
+---
+title: "Time_to_cross"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## Library
+```{r}
+library(ggResidpanel)
+```
+
+## Data
+
+```{r}
+data <- read.csv("/home/baptiste.criniere/Documents/Oceane/data_long_mean.csv")
+data$time_ord <- factor(data$time, levels = c("Before-Surgery", "1 Week", "1 Month", "2 Months", "3 Months"))
+```
+
+## Analyse descriptive
+### Analyse de la variable time to cross
+
+On représente par un histogramme les valeurs de time to cross. On représente aussi par une boxplot.
+```{r}
+p0 <- data %>% ggplot(aes(x = time_to_cross)) +
+    geom_histogram(binwidth=3, fill="#69b3a2", color="#e9ecef", alpha=0.9) +
+  xlab("Time to cross")
+p0
+```
+
+## Outliers
+```{r}
+temp <- identify_outliers(data, time_to_cross)
+data$time_to_cross_no_extreme <- data$time_to_cross
+for (i in 1:nrow(temp)){
+  data[data$mouse==temp$mouse[i]&data$time==temp$time[i],]$time_to_cross_no_extreme <- NA
+}
+```
+
+
+### Graphique en trellis
+Représentation du score "time to cross" en fonction de la visite par un graphique en trellis, en regroupant les souris par groupe.
+\
+On observe globalement un diminution entre la première visite et la seconde au sein des trois groupes, et aussi une augmentation entre la 4ème visite et la dernière.
+```{r , echo=FALSE, fig.align = 'center'}
+p1 <- data %>% 
+  ggplot(aes(x = time_ord,
+             y = time_to_cross_no_extreme,
+             colour= mouse,
+             group = mouse)) +
+  geom_point(size = 0.75) +
+  geom_line(
+            alpha = .5,
+            size = 1) +
+  facet_grid(. ~ group)  +
+  theme_bw() +
+  scale_x_discrete(labels = c('1','2','3','4','5'))+
+  xlab("Visit") + ylab("Time to cross") +
+  theme(strip.text.x = element_text(size=12, face="bold", color ="white"),
+        strip.background = element_rect( fill="gray8"))
+p1
+```
+## Analyse au cours du temps par groupe
+```{r}
+p2 <- data %>% 
+  ggplot(aes(x = group,
+             y = time_to_cross_no_extreme,
+             fill = group)) +
+  geom_boxplot() +
+  theme_bw() +
+  facet_grid(. ~ time_ord) +
+  theme(strip.text.x = element_text(size=12, face="bold", color ="white"),
+        strip.background = element_rect( fill="gray8"))+
+  labs(x = "",y = "")
+p2
+```
+
+## Means plots
+```{r}
+data %>% 
+  ggplot(aes(x = num_time,
+             y = time_to_cross_no_extreme,
+             color = group)) +
+  stat_summary() +                      
+  stat_summary(fun = "mean",            
+               geom = "line")+
+  theme_bw()
+```
+
+
+
+
+## Modèle
+Le meilleur des modèles est le modèle avec un effet mixte "nested" sur la constante de la souris et du doneur.
+Étant donné que les données longitudinales, il est plus approprié de commencer par inclure la variable temporelle dans le modèle nul comme effet fixe uniquement. 
+\
+En moyenne les souris commencent avec un score de time_to_cross de 14.12, puis ce score diminue de -0.9 points en moyenne après la greffe.
+Cette diminution est quasiment statistiquement significative.
+\
+
+L'AIC du modèle est de 2650.\
+Environ 25% du score dbase s'explique par des différences de souris à souris. Ainsi les souris présentent une hétérogénité importante au niveau du score time to cross. \
+Notre premier modèle explique moins de 2.5% de la variance.\ 
+Gain d'AIC par rapport au modèle sans effet mixte, au vu du gain d'AIC un test de rapport de vraisemblance pour des modèles emboîtés va nous permettre de rejeter l'hypothèse nulle qui est que le modèle sans effet mixte est aussi "bon" que le modèle avec des effets mixtes.
+```{r}
+# Modèle sans effet mixte
+mod0 <- lm(time_to_cross_no_extreme ~ time_ord, data = data)
+AIC(mod0)
+# Modèle effet mixte de la souris
+mod0.1 <- lmerTest::lmer(time_to_cross_no_extreme ~ time_ord + (1 | mouse), data = data)
+AIC(mod0.1)
+
+# Modèle effet mixte de la souris et du donneur
+AIC(mod0.1)
+summary(mod0.1)
+Anova(mod0.1)
+
+texreg::knitreg(mod0.1, 
+                single.row = TRUE,
+                caption = "MLM: Random Intercepts Null Model fit w/REML",
+                caption.above = TRUE,
+                )
+set_theme(base = theme_bw())
+sjPlot::plot_model(mod0.1,
+                   type = "pred",
+                   terms = c("time_ord"), theme = "bw", colors = "red")
+performance::icc(mod0.1)
+performance::r2(mod0.1)
+```
+
+
+## Ajout de la variable groupe modèle complet
+Pas d'effet du groupe.
+\
+Pas d'effet du groupe à baseline (avant la grefffe) ce qui est cohérent. Un effet du temps. 
+```{r}
+# Modèle effet mixte de la souris et du donneur
+mod1.0 <- lmerTest::lmer(time_to_cross_no_extreme ~ group*time_ord + (1 | mouse), data = data)
+AIC(mod1.0)
+anova(mod0.1,mod1.0)
+Anova(mod1.0)
+sjPlot::plot_model(mod1.0,
+                   type = "pred",
+                   terms = c("time_ord", "group"),
+                   title = "")
+```
+
+## Interprétation des effets fixes
+## Interprétation des effets aléatoires
+La variance des résidus est de 17.86.\
+
+```{r}
+lme4::VarCorr(mod1.0)%>% 
+  print(comp = c("Variance", "Std.Dev"),
+        digits = 3)
+```
+
+
+## Hypothèses
+On observe que les résidus sont normalement distribués.
+```{r}
+ggResidpanel::resid_panel(mod1.0)
+```
+
+## Comparaisons post hoc
+```{r}
+mod1.0 %>% 
+  emmeans::emmeans(pairwise ~ time_ord,
+                   at = list(age = 13))
+mod1.0 %>% 
+  emmeans::emmeans(pairwise ~ group,
+                   at = list(age = 13))
+mod1.0 %>% 
+  emmeans::emmeans(pairwise ~ time_ord:group,
+                   at = list(age = 13))
+```
+ 
+
+
+
+
+
+
+
+
+
+
